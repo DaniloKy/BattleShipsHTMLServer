@@ -5,6 +5,8 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,10 +15,11 @@ public class Main {
 
     private static final int PORT = 8000;
     private final static int MAX_CLIENTS = 2;
-    public static Map<String, Player> playerClients = new HashMap<>();
+    public static Map<String, Player> playerClients = new ConcurrentHashMap<>();
     public static String gameState = "waitingForPlayers";
     private static ConcurrentHashMap<String, String> sharedState = new ConcurrentHashMap<>();
     private static String lastMessageSent;
+    private static final long timeoutInSeconds = 10;
 
 
     public static void main(String[] args) throws IOException {
@@ -32,6 +35,40 @@ public class Main {
         server.start();
         System.out.println("Server started on port 8000...");
 
+
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(10000);
+                    System.out.println("Check inactive players");
+                    checkInactivePlayers();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+    }
+
+    public static void checkInactivePlayers() {
+        LocalDateTime now = LocalDateTime.now();
+        if(!playerClients.isEmpty()){
+            try {
+                playerClients.forEach((playerName, player) -> {
+                    System.out.println(playerName);
+                    long secondsInactive = Duration.between(player.getLastActiveTime(), now).getSeconds();
+                    if (secondsInactive > timeoutInSeconds) {
+                        System.out.println("Player " + playerName + " timed out and was removed.");
+                        playerClients.remove(playerName);
+                    }
+                });
+            } catch (Exception e){
+                e.printStackTrace();
+            }
+
+        } else {
+            System.out.println("no players yet, no check");
+        }
 
     }
 
@@ -82,6 +119,8 @@ public class Main {
         public void handle(HttpExchange exchange) throws IOException {
             System.out.println("STATUS REQUEST");
             if ("GET".equals(exchange.getRequestMethod())) {
+                String clientId = exchange.getRequestHeaders().getFirst("Client-Username");
+                playerClients.get(clientId).updateLastTimeRequest();
                 exchange.sendResponseHeaders(200, gameState.length());
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(gameState.getBytes());
@@ -101,12 +140,13 @@ public class Main {
                     System.out.println(clientUsername + " connected to the server!");
                     if (playerClients.size() <= 0){
                         System.out.println("PLAYER 1");
-                        //client1 = new Player(clientUsername);
                         playerClients.put(clientUsername, new Player(clientUsername));
+                        playerClients.get(clientUsername).updateLastTimeRequest();
                         gameState = "waitingForLastPlayer";
                     } else {
                         System.out.println("PLAYER 2");
                         playerClients.put(clientUsername, new Player(clientUsername));
+                        playerClients.get(clientUsername).updateLastTimeRequest();
                         gameState = "canCreateBoards";
                     }
                     exchange.sendResponseHeaders(200, 10);

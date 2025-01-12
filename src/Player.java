@@ -1,7 +1,11 @@
+import java.time.LocalDateTime;
+import java.util.Date;
+
 public class Player {
 
 
     public String name;
+    public LocalDateTime lastActiveTime;
     public Board board;
 
     public Player(String name){
@@ -12,8 +16,12 @@ public class Player {
         this.board = board;
     }
 
+    public void updateLastTimeRequest(){
+        this.lastActiveTime = LocalDateTime.now();
+    }
 
-
-
+    public LocalDateTime getLastActiveTime(){
+        return this.lastActiveTime;
+    }
 
 }
