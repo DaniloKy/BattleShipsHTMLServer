@@ -19,7 +19,7 @@ public class Main {
     public static String gameState = "waitingForPlayers";
     private static ConcurrentHashMap<String, String> sharedState = new ConcurrentHashMap<>();
     private static String lastMessageSent;
-    private static final long timeoutInSeconds = 10;
+    private static final long timeoutInSeconds = 5;
 
 
     public static void main(String[] args) throws IOException {

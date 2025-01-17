@@ -1,8 +1,6 @@
 import java.time.LocalDateTime;
-import java.util.Date;
 
 public class Player {
-
 
     public String name;
     public LocalDateTime lastActiveTime;
