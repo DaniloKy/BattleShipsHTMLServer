@@ -7,7 +7,6 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,6 +20,8 @@ public class Main {
     private static String lastMessageSent;
     private static final long timeoutInSeconds = 5;
 
+    private static Player firstPlayer = null;
+
 
     public static void main(String[] args) throws IOException {
 
@@ -28,9 +29,9 @@ public class Main {
         server.createContext("/", new ConnectionHandler());
         server.createContext("/send", new SendHandler());
         server.createContext("/cancelCon", new CancellationHandler());
-        //server.createContext("/receive", new ReceiveHandler());
         server.createContext("/stateRequest", new StateRequestHandler());
         server.createContext("/sendBoard", new SendBoardHandler());
+        server.createContext("/sendAttack", new SendAttackHandler());
 
         server.setExecutor(null);
         server.start();
@@ -105,23 +106,110 @@ public class Main {
                 System.out.println("MESSAGE RECEIVED");
                 System.out.println(message);
                 Player player = playerClients.get(clientUsername);
-                player.setBoard(new Board());
+                player.setBoard(new Board(message));
+                player.setPlayerBoardReady(true);
+                System.out.println(player.getName()+", board: ");
+                player.printBoard();
+                if (firstPlayer == null) {
+                    firstPlayer = player;
+                    System.out.println(firstPlayer.getName() + " will start the game!");
+                }
                 boolean bothPlayerReady = true;
                 for (Player player_: playerClients.values()) {
-                    if (player_.getBoard() == null) {
+                    if (!player_.isPlayerBoardReady()) {
                         bothPlayerReady = false;
                         gameState = "waitingForLastPlayerToCreateBoard";
                         break;
                     }
                 }
                 if (bothPlayerReady)
-                    gameState = "gameIsReadyToStart";
+                    gameState = "turn-" + firstPlayer;;
                 exchange.sendResponseHeaders(200, gameState.length());
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(gameState.getBytes());
                 }
             } else {
                 exchange.sendResponseHeaders(405, -1); // Method Not Allowed
+            }
+        }
+    }
+
+    static class SendAttackHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("POST".equals(exchange.getRequestMethod())) {
+                String clientUsername = exchange.getRequestHeaders().getFirst("Client-Username");
+                String message = new String(exchange.getRequestBody().readAllBytes());
+                System.out.println("MESSAGE RECEIVED");
+                System.out.println(message);
+                message.trim();
+                String[] coordS = message.split(",");
+
+                if (coordS.length != 2) {
+                    sendResponse(exchange, 400, "Invalid coordinate format"); // Bad Request
+                    return;
+                }
+
+                try {
+                    int y = Integer.parseInt(coordS[0].trim());
+                    int x = Integer.parseInt(coordS[1].trim());
+                    Coordinate attackCoordinate = new Coordinate(x, y);
+
+                    if (playerClients.containsKey(clientUsername)){
+                        Player playerAttacking = playerClients.get(clientUsername);
+                        Player opponent = playerClients.values()
+                                .stream()
+                                .filter(player -> !player.getName().equals(clientUsername))
+                                .findFirst()
+                                .orElse(null);
+                        System.out.println(playerAttacking.getName());
+                        System.out.println(opponent.getName());
+                        if (opponent != null){
+                            boolean hit = playerAttacking.fireAndAttackOpp(opponent, attackCoordinate);
+                            if (hit) {
+                                System.out.println(playerAttacking.getName()+" hit "+opponent.getName());
+                                if (checkIfPlayerHasWon(opponent)) {
+                                    gameState = "endGame";
+                                    System.out.println("Player " + playerAttacking.getName() + " has won the game!");
+                                }/* else {
+                                    opponent.printBoard();
+                                    gameState = "turn-"+opponent.getName();
+                                    System.out.println("Player " + opponent.getName() + " turn");
+                                }*/
+                            }else {
+                                System.out.println(playerAttacking.getName()+" miss");
+                                gameState = "turn-"+opponent.getName();
+                                System.out.println("Player " + opponent.getName() + " turn");
+                            }
+                            sendResponse(exchange, 200, gameState);
+                            return;
+                        } else {
+                            System.out.println("Opponent not found");
+                            sendResponse(exchange, 404, "Opponent not found");
+                            return;
+                        }
+                    } else {
+                        System.out.println("Player not found");
+                        sendResponse(exchange, 404, "Player not found");
+                        return;
+                    }
+                } catch (NumberFormatException e) {
+                    System.err.println("Invalid coordinates: " + message);
+                    sendResponse(exchange, 400, "Invalid coordinate format");
+                    return;
+                }
+            } else {
+                exchange.sendResponseHeaders(405, -1); // Method Not Allowed
+            }
+        }
+
+        private boolean checkIfPlayerHasWon(Player opponent) {
+            return opponent.getShips().values().stream().allMatch(ship -> ship.isShipDestroyed());
+        }
+        private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
+            exchange.sendResponseHeaders(statusCode, response.getBytes().length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(response.getBytes());
             }
         }
     }
@@ -149,7 +237,7 @@ public class Main {
     static class StateRequestHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            System.out.println("STATUS REQUEST");
+            //System.out.println("STATUS REQUEST");
             if ("GET".equals(exchange.getRequestMethod())) {
                 String clientId = exchange.getRequestHeaders().getFirst("Client-Username");
                 playerClients.get(clientId).updateLastTimeRequest();
