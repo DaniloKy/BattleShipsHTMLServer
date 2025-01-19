@@ -4,7 +4,7 @@ public class Player {
 
     public String name;
     public LocalDateTime lastActiveTime;
-    public Board board;
+    public Board board = null;
 
     public Player(String name){
         this.name = name;
@@ -12,6 +12,9 @@ public class Player {
 
     public void setBoard(Board board){
         this.board = board;
+    }
+    public Board getBoard(){
+        return this.board;
     }
 
     public void updateLastTimeRequest(){

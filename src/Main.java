@@ -30,6 +30,7 @@ public class Main {
         server.createContext("/cancelCon", new CancellationHandler());
         //server.createContext("/receive", new ReceiveHandler());
         server.createContext("/stateRequest", new StateRequestHandler());
+        server.createContext("/sendBoard", new SendBoardHandler());
 
         server.setExecutor(null);
         server.start();
@@ -95,15 +96,46 @@ public class Main {
         }
     }
 
+    static class SendBoardHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("POST".equals(exchange.getRequestMethod())) {
+                String clientUsername = exchange.getRequestHeaders().getFirst("Client-Username");
+                String message = new String(exchange.getRequestBody().readAllBytes());
+                System.out.println("MESSAGE RECEIVED");
+                System.out.println(message);
+                Player player = playerClients.get(clientUsername);
+                player.setBoard(new Board());
+                boolean bothPlayerReady = true;
+                for (Player player_: playerClients.values()) {
+                    if (player_.getBoard() == null) {
+                        bothPlayerReady = false;
+                        gameState = "waitingForLastPlayerToCreateBoard";
+                        break;
+                    }
+                }
+                if (bothPlayerReady)
+                    gameState = "gameIsReadyToStart";
+                exchange.sendResponseHeaders(200, gameState.length());
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(gameState.getBytes());
+                }
+            } else {
+                exchange.sendResponseHeaders(405, -1); // Method Not Allowed
+            }
+        }
+    }
+
     static class ReceiveHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if ("GET".equals(exchange.getRequestMethod())) {
-                String clientId = exchange.getRequestHeaders().getFirst("Client-ID");
-                String message = sharedState.getOrDefault(clientId, "No new messages");
+            if ("POST".equals(exchange.getRequestMethod())) {
+                String clientId = exchange.getRequestHeaders().getFirst("Client-Username");
+                //String message = sharedState.getOrDefault(clientId, "No new messages");
+                String message = new String(exchange.getRequestBody().readAllBytes());
+
                 System.out.println("MESSAGE RECEIVED");
                 System.out.println(message);
-                System.out.println("LAST MESSAGE: "+lastMessageSent);
                 exchange.sendResponseHeaders(200, lastMessageSent.length());
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(lastMessageSent.getBytes());
@@ -138,7 +170,7 @@ public class Main {
                 if ("GET".equals(exchange.getRequestMethod())) {
                     String clientUsername = exchange.getRequestHeaders().getFirst("Client-Username");
                     System.out.println(clientUsername + " connected to the server!");
-                    if (playerClients.size() <= 0){
+                    if (playerClients.size() <= 0) {
                         System.out.println("PLAYER 1");
                         playerClients.put(clientUsername, new Player(clientUsername));
                         playerClients.get(clientUsername).updateLastTimeRequest();
