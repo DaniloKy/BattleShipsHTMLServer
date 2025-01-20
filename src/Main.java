@@ -1,3 +1,4 @@
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -123,7 +124,7 @@ public class Main {
                     }
                 }
                 if (bothPlayerReady)
-                    gameState = "turn-" + firstPlayer;;
+                    gameState = "startingGame-" + firstPlayer.getName();
                 exchange.sendResponseHeaders(200, gameState.length());
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(gameState.getBytes());
@@ -134,10 +135,138 @@ public class Main {
         }
     }
 
+
+    static class SendAttackHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            System.out.println("handle");
+            if ("POST".equals(exchange.getRequestMethod())) {
+                String clientUsername = exchange.getRequestHeaders().getFirst("Client-Username");
+                String message = new String(exchange.getRequestBody().readAllBytes()).trim();
+                System.out.println("MESSAGE RECEIVED: " + message);
+
+                String[] coordS = message.split(",");
+
+                try {
+                    int y = Integer.parseInt(coordS[0].trim());
+                    int x = Integer.parseInt(coordS[1].trim());
+                    Coordinate attackCoordinate = new Coordinate(x, y);
+
+                    System.out.println("attack cord "+attackCoordinate);
+
+                    Player playerAttacking = playerClients.get(clientUsername);
+                    Player opponent = playerClients.values()
+                            .stream()
+                            .filter(player -> !player.getName().equals(clientUsername))
+                            .findFirst()
+                            .orElse(null);
+                    System.out.println(playerAttacking + " and "+ opponent);
+                    AttackResponse response = new AttackResponse();
+                    response.setPreviousTurn(playerAttacking.getName());
+                    response.setShot(attackCoordinate);
+                    if (opponent != null) {
+                        System.out.println("opponent+++"+opponent.getName());
+                        boolean hit = playerAttacking.fireAndAttackOpp(opponent, attackCoordinate);
+                        if (hit) {
+                            response.setHit(true);
+                            if (checkIfPlayerHasWon(opponent)) {
+                                gameState = "endGame";
+                                response.setGameState("endGame");
+                                response.setTurn(null);
+                            } else {
+                                gameState = "playing";
+                                response.setGameState(gameState);
+                                response.setTurn(playerAttacking.getName());
+                            }
+                            System.out.println("HIT: "+ response.gameState+ ","+response.turn);
+                        } else {
+                            response.setHit(false);
+                            gameState = "playing";
+                            response.setGameState(gameState);
+                            response.setTurn(opponent.getName());
+
+                            System.out.println("MISS: "+ response.gameState+ ","+response.turn);
+                        }
+                    } else {
+                        System.out.println("OPPONENT NOT FOUND");
+                        exchange.sendResponseHeaders( 400, -1);
+                    }
+
+                    try {
+                        ObjectMapper objectMapper = new ObjectMapper();
+                        String jsonResponse = objectMapper.writeValueAsString(response);
+                        System.out.println("RESPONSE: ");
+                        System.out.println(jsonResponse);
+                        exchange.sendResponseHeaders(200, jsonResponse.length());
+                        try (OutputStream os = exchange.getResponseBody()) {
+                            os.write(jsonResponse.getBytes());
+                        }
+                    } catch (Exception e){
+                        e.printStackTrace();
+                    }
+
+
+                } catch (NumberFormatException e) {
+                    System.err.println("Invalid coordinates: " + message);
+                    exchange.sendResponseHeaders( 400, -1);
+                    return;
+                }
+            } else {
+                exchange.sendResponseHeaders(405, -1);
+            }
+        }
+
+        private boolean checkIfPlayerHasWon(Player opponent) {
+            return opponent.getShips().values().stream().allMatch(ship -> ship.isShipDestroyed());
+        }
+
+        class AttackResponse {
+            private String previousTurn;
+            private boolean hit;
+            private int[] shot = new int[2];
+            private String gameState;
+            private String turn;
+            public AttackResponse() {}
+            public String getPreviousTurn() {
+                return previousTurn;
+            }
+            public void setPreviousTurn(String previousTurn) {
+                this.previousTurn = previousTurn;
+            }
+            public boolean isHit() {
+                return hit;
+            }
+            public void setHit(boolean hit) {
+                this.hit = hit;
+            }
+            public int[] getShot() {
+                return shot;
+            }
+            public void setShot(Coordinate shot) {
+                this.shot[0] = shot.getY();
+                this.shot[1] = shot.getX();
+            }
+            public String getGameState() {
+                return gameState;
+            }
+            public void setGameState(String gameState) {
+                this.gameState = gameState;
+            }
+            public String getTurn() {
+                return turn;
+            }
+            public void setTurn(String turn) {
+                this.turn = turn;
+            }
+        }
+
+    }
+    /*
     static class SendAttackHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
+                JSONPObject json = new JSONPObject()
                 String clientUsername = exchange.getRequestHeaders().getFirst("Client-Username");
                 String message = new String(exchange.getRequestBody().readAllBytes());
                 System.out.println("MESSAGE RECEIVED");
@@ -171,11 +300,7 @@ public class Main {
                                 if (checkIfPlayerHasWon(opponent)) {
                                     gameState = "endGame";
                                     System.out.println("Player " + playerAttacking.getName() + " has won the game!");
-                                }/* else {
-                                    opponent.printBoard();
-                                    gameState = "turn-"+opponent.getName();
-                                    System.out.println("Player " + opponent.getName() + " turn");
-                                }*/
+                                }
                             }else {
                                 System.out.println(playerAttacking.getName()+" miss");
                                 gameState = "turn-"+opponent.getName();
@@ -213,6 +338,7 @@ public class Main {
             }
         }
     }
+    */
 
     static class ReceiveHandler implements HttpHandler {
         @Override
