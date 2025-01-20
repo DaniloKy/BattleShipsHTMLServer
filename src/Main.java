@@ -148,6 +148,7 @@ public class Main {
                 String[] coordS = message.split(",");
 
                 try {
+                    ObjectMapper objectMapper = new ObjectMapper();
                     int y = Integer.parseInt(coordS[0].trim());
                     int x = Integer.parseInt(coordS[1].trim());
                     Coordinate attackCoordinate = new Coordinate(x, y);
@@ -173,19 +174,20 @@ public class Main {
                                 gameState = "endGame";
                                 response.setGameState("endGame");
                                 response.setTurn(null);
+                                //gameState += objectMapper.writeValueAsString(response);
                             } else {
-                                gameState = "playing";
                                 response.setGameState(gameState);
                                 response.setTurn(playerAttacking.getName());
+                                gameState = "playing-"+objectMapper.writeValueAsString(response);
                             }
-                            System.out.println("HIT: "+ response.gameState+ ","+response.turn);
+                            System.out.println("HIT: "+ gameState);
                         } else {
                             response.setHit(false);
-                            gameState = "playing";
                             response.setGameState(gameState);
                             response.setTurn(opponent.getName());
+                            gameState = "playing-"+objectMapper.writeValueAsString(response);
 
-                            System.out.println("MISS: "+ response.gameState+ ","+response.turn);
+                            System.out.println("MISS: "+ gameState);
                         }
                     } else {
                         System.out.println("OPPONENT NOT FOUND");
@@ -193,13 +195,9 @@ public class Main {
                     }
 
                     try {
-                        ObjectMapper objectMapper = new ObjectMapper();
-                        String jsonResponse = objectMapper.writeValueAsString(response);
-                        System.out.println("RESPONSE: ");
-                        System.out.println(jsonResponse);
-                        exchange.sendResponseHeaders(200, jsonResponse.length());
+                        exchange.sendResponseHeaders(200, 4);
                         try (OutputStream os = exchange.getResponseBody()) {
-                            os.write(jsonResponse.getBytes());
+                            os.write("wait".getBytes());
                         }
                     } catch (Exception e){
                         e.printStackTrace();
