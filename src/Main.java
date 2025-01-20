@@ -171,22 +171,17 @@ public class Main {
                         if (hit) {
                             response.setHit(true);
                             if (checkIfPlayerHasWon(opponent)) {
-                                gameState = "endGame";
-                                response.setGameState("endGame");
                                 response.setTurn(null);
-                                //gameState += objectMapper.writeValueAsString(response);
+                                gameState = "endGame-" + objectMapper.writeValueAsString(response);;
                             } else {
-                                response.setGameState(gameState);
                                 response.setTurn(playerAttacking.getName());
                                 gameState = "playing-"+objectMapper.writeValueAsString(response);
                             }
                             System.out.println("HIT: "+ gameState);
                         } else {
                             response.setHit(false);
-                            response.setGameState(gameState);
                             response.setTurn(opponent.getName());
                             gameState = "playing-"+objectMapper.writeValueAsString(response);
-
                             System.out.println("MISS: "+ gameState);
                         }
                     } else {
@@ -222,7 +217,6 @@ public class Main {
             private String previousTurn;
             private boolean hit;
             private int[] shot = new int[2];
-            private String gameState;
             private String turn;
             public AttackResponse() {}
             public String getPreviousTurn() {
@@ -244,12 +238,6 @@ public class Main {
                 this.shot[0] = shot.getY();
                 this.shot[1] = shot.getX();
             }
-            public String getGameState() {
-                return gameState;
-            }
-            public void setGameState(String gameState) {
-                this.gameState = gameState;
-            }
             public String getTurn() {
                 return turn;
             }
@@ -257,86 +245,8 @@ public class Main {
                 this.turn = turn;
             }
         }
-
     }
-    /*
-    static class SendAttackHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            if ("POST".equals(exchange.getRequestMethod())) {
-                JSONPObject json = new JSONPObject()
-                String clientUsername = exchange.getRequestHeaders().getFirst("Client-Username");
-                String message = new String(exchange.getRequestBody().readAllBytes());
-                System.out.println("MESSAGE RECEIVED");
-                System.out.println(message);
-                message.trim();
-                String[] coordS = message.split(",");
 
-                if (coordS.length != 2) {
-                    sendResponse(exchange, 400, "Invalid coordinate format"); // Bad Request
-                    return;
-                }
-
-                try {
-                    int y = Integer.parseInt(coordS[0].trim());
-                    int x = Integer.parseInt(coordS[1].trim());
-                    Coordinate attackCoordinate = new Coordinate(x, y);
-
-                    if (playerClients.containsKey(clientUsername)){
-                        Player playerAttacking = playerClients.get(clientUsername);
-                        Player opponent = playerClients.values()
-                                .stream()
-                                .filter(player -> !player.getName().equals(clientUsername))
-                                .findFirst()
-                                .orElse(null);
-                        System.out.println(playerAttacking.getName());
-                        System.out.println(opponent.getName());
-                        if (opponent != null){
-                            boolean hit = playerAttacking.fireAndAttackOpp(opponent, attackCoordinate);
-                            if (hit) {
-                                System.out.println(playerAttacking.getName()+" hit "+opponent.getName());
-                                if (checkIfPlayerHasWon(opponent)) {
-                                    gameState = "endGame";
-                                    System.out.println("Player " + playerAttacking.getName() + " has won the game!");
-                                }
-                            }else {
-                                System.out.println(playerAttacking.getName()+" miss");
-                                gameState = "turn-"+opponent.getName();
-                                System.out.println("Player " + opponent.getName() + " turn");
-                            }
-                            sendResponse(exchange, 200, gameState);
-                            return;
-                        } else {
-                            System.out.println("Opponent not found");
-                            sendResponse(exchange, 404, "Opponent not found");
-                            return;
-                        }
-                    } else {
-                        System.out.println("Player not found");
-                        sendResponse(exchange, 404, "Player not found");
-                        return;
-                    }
-                } catch (NumberFormatException e) {
-                    System.err.println("Invalid coordinates: " + message);
-                    sendResponse(exchange, 400, "Invalid coordinate format");
-                    return;
-                }
-            } else {
-                exchange.sendResponseHeaders(405, -1); // Method Not Allowed
-            }
-        }
-
-        private boolean checkIfPlayerHasWon(Player opponent) {
-            return opponent.getShips().values().stream().allMatch(ship -> ship.isShipDestroyed());
-        }
-        private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
-            exchange.sendResponseHeaders(statusCode, response.getBytes().length);
-            try (OutputStream os = exchange.getResponseBody()) {
-                os.write(response.getBytes());
-            }
-        }
-    }
-    */
 
     static class ReceiveHandler implements HttpHandler {
         @Override
